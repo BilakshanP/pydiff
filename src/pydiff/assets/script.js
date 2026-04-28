@@ -154,6 +154,11 @@
             btn.textContent = '✕';
             fsCurrent = container;
             document.body.classList.add('has-fullscreen');
+            // Measure file-header height so CSS can size .file-content to fill the rest.
+            if (container.classList.contains('file-container')) {
+                var hdr = container.querySelector(':scope > .file-header');
+                if (hdr) container.style.setProperty('--fs-header-h', hdr.offsetHeight + 'px');
+            }
         });
     });
     document.addEventListener('keydown', function(e) {
