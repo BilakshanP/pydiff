@@ -151,7 +151,7 @@ def split_diff_table(
     def build(rows: list[str], desc: str, suffix: str) -> str:
         tid = f' id="{top_id}{suffix}"' if top_id else ""
         digits = max(len(str(max_lineno)), 2)
-        style = f' style="--lineno-width: calc({digits}ch + 20px)"'
+        style = f' style="--lineno-width: calc({digits}ch + 16px)"'
         return (
             f'<table class="diff"{tid}{style}><thead><tr><th colspan="3">{desc}</th></tr></thead>'
             f"<tbody>{''.join(rows)}</tbody></table>"
