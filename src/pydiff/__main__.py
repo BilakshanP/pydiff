@@ -1,3 +1,3 @@
-from pydiff.diff import main
+from pydiff.cli import main
 
 main()

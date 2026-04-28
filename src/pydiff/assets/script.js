@@ -1,0 +1,123 @@
+(function() {
+    function setView(split, mode) {
+        var L = split.querySelector('.pane.left');
+        var R = split.querySelector('.pane.right');
+        var H = split.querySelector('.handle');
+        L.classList.remove('hidden','solo'); R.classList.remove('hidden','solo'); H.classList.remove('hidden');
+        if (mode === 'left')  { R.classList.add('hidden'); H.classList.add('hidden'); L.classList.add('solo'); }
+        if (mode === 'right') { L.classList.add('hidden'); H.classList.add('hidden'); R.classList.add('solo'); }
+        if (mode === 'both') { L.style.flexBasis = '50%'; R.style.flexBasis = '50%'; }
+        split.dataset.view = mode;
+        var fc = split.closest('.file-content');
+        fc.querySelectorAll('[data-view]').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.view === mode);
+        });
+    }
+
+    document.querySelectorAll('.file-content').forEach(function(fc) {
+        var split = fc.querySelector('.split:not(.single)');
+        if (!split) return;
+        var L = split.querySelector('.pane.left');
+        var R = split.querySelector('.pane.right');
+        var H = split.querySelector('.handle');
+
+        fc.querySelectorAll('[data-view]').forEach(function(b) {
+            b.addEventListener('click', function(e) {
+                e.preventDefault();
+                setView(split, b.dataset.view);
+            });
+        });
+        var syncBtn = fc.querySelector('[data-sync-toggle]');
+        if (syncBtn) {
+            syncBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var wasSync = !split.classList.contains('nosync');
+                var y = wasSync ? split.scrollTop : (L.scrollTop || R.scrollTop);
+                split.classList.toggle('nosync');
+                var on = !split.classList.contains('nosync');
+                syncBtn.classList.toggle('active', on);
+                syncBtn.textContent = on ? 'Sync: on' : 'Sync: off';
+                // Transfer scroll position to the newly-active scroller(s).
+                requestAnimationFrame(function() {
+                    if (on) {
+                        split.scrollTop = y;
+                    } else {
+                        L.scrollTop = y;
+                        R.scrollTop = y;
+                    }
+                });
+            });
+        }
+
+        // Drag handle
+        var dragging = false;
+        H.addEventListener('mousedown', function(e) {
+            if (split.dataset.view !== 'both') return;
+            dragging = true;
+            H.classList.add('dragging');
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', function(e) {
+            if (!dragging) return;
+            var rect = split.getBoundingClientRect();
+            var pct = ((e.clientX - rect.left) / rect.width) * 100;
+            pct = Math.max(10, Math.min(90, pct));
+            L.style.flexBasis = pct + '%';
+            R.style.flexBasis = (100 - pct) + '%';
+        });
+        document.addEventListener('mouseup', function() {
+            if (dragging) { dragging = false; H.classList.remove('dragging'); }
+        });
+    });
+
+    // Target prev/next navigation
+    var targets = Array.prototype.slice.call(document.querySelectorAll('.target-section'));
+    if (targets.length > 1) {
+        var prev = document.getElementById('nav-prev');
+        var next = document.getElementById('nav-next');
+        function currentIndex() {
+            var y = window.scrollY + 80;
+            var idx = 0;
+            for (var i = 0; i < targets.length; i++) {
+                if (targets[i].offsetTop <= y) idx = i;
+            }
+            return idx;
+        }
+        function jump(delta) {
+            var i = currentIndex() + delta;
+            if (i < 0) i = 0;
+            if (i >= targets.length) i = targets.length - 1;
+            targets[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        if (prev) prev.addEventListener('click', function() { jump(-1); });
+        if (next) next.addEventListener('click', function() { jump(1); });
+    }
+
+    // Fullscreen toggle (target-section or file-container)
+    var fsCurrent = null;
+    function exitFullscreen() {
+        if (!fsCurrent) return;
+        fsCurrent.classList.remove('fullscreen');
+        var btn = fsCurrent.querySelector(':scope > summary [data-expand]');
+        if (btn) btn.textContent = '⛶';
+        fsCurrent = null;
+        document.body.classList.remove('has-fullscreen');
+    }
+    document.querySelectorAll('[data-expand]').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            var container = btn.closest('.file-container') || btn.closest('.target-section');
+            if (!container) return;
+            if (fsCurrent === container) { exitFullscreen(); return; }
+            if (fsCurrent) exitFullscreen();
+            container.classList.add('fullscreen');
+            if (!container.open) container.open = true;
+            btn.textContent = '✕';
+            fsCurrent = container;
+            document.body.classList.add('has-fullscreen');
+        });
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') exitFullscreen();
+    });
+})();

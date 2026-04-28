@@ -11,3 +11,6 @@ wheels/
 
 # Generated diff reports
 *.html
+
+# Local throwaway demo/fixture repo
+demo_repo/

@@ -6,7 +6,7 @@ requires-python = ">=3.14"
 dependencies = []
 
 [project.scripts]
-pydiff = "pydiff.diff:main"
+pydiff = "pydiff.cli:main"
 
 [build-system]
 requires = ["hatchling"]
