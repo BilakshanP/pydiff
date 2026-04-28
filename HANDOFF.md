@@ -119,8 +119,8 @@ CSS_STYLES: str                                # loaded from pydiff/assets/style
 JS_SCRIPT: str                                 # loaded from pydiff/assets/script.js
 
 def anchor_id(ref_label: str, path: str) -> str
-def split_diff_table(diff_html: str, from_desc: str, to_desc: str) -> tuple[str, str]
-def render_file_block(...) -> str
+def split_diff_table(diff_html: str, from_desc: str, to_desc: str, max_lineno: int) -> tuple[str, str]
+def render_file_block(..., max_lineno: int) -> str
 def render(args: argparse.Namespace) -> None
 ```
 
@@ -154,6 +154,15 @@ def main() -> None
 </details>
 ```
 
+### Diff table structure (per pane)
+
+Each pane's `<table class="diff">` has 3 columns per row: `[diff_next, diff_header, code]`.
+
+- **`td.diff_next`** — f/n/t navigation column. `position: sticky; left: 0; z-index: 3`. IDs are suffixed `_l` / `_r` per pane so anchors don't collide. Links rewritten to match.
+- **`td.diff_header`** — line numbers. `position: sticky; left: var(--nav-width, 25px); z-index: 2`. Width set per-table via `--lineno-width: calc(Nch + 20px)` where N = `len(str(max_lineno))`.
+- **`tr.hunk-boundary`** — rows where line numbers jump (context gap). Detected by comparing consecutive line numbers in `split_diff_table`. CSS draws `border-top: 1px solid #24292f`.
+- **`<table>` id** — `difflib_chg_toN__top_{l,r}` preserved from difflib for `t` (top) navigation.
+
 ## Scroll model (critical — don't break)
 
 - **Sync mode (default)**: outer `.split` is the single vertical scroller (`max-height: 70vh; overflow-y: auto`). `.pane-inner` handles horizontal scroll per pane. Native smooth.
@@ -170,8 +179,10 @@ All scoped to `.file-content` parent (not to `<summary>` — buttons inside `<su
 - **View toggle** (data-view=both|left|right): adds/removes `.hidden`/`.solo` classes on panes + `.hidden` on handle.
 - **Sync toggle** (data-sync-toggle): toggles `.nosync` class on `.split`, updates button label "Sync: on"/"Sync: off", transfers scroll position.
 - **Drag handle**: mousedown/move/up, clamped 10–90%, only active when `data-view === 'both'`. Sets `flex-basis` on both panes.
-- **Fullscreen toggle** (data-expand): toggles `.fullscreen` on closest `.file-container` or `.target-section`. Only one at a time. Esc to exit. Icon swaps `⛶` ↔ `✕`.
+- **Fullscreen toggle** (data-expand): toggles `.fullscreen` on closest `.file-container` or `.target-section`. Only one at a time. Esc to exit. Icon swaps `⛶` ↔ `✕`. Fullscreen bumps `.split` max-height to `calc(100vh - 130px)` (file) or `calc(100vh - 180px)` (target).
 - **Target prev/next FAB**: shown only when >1 targets; finds the current target by scroll position + offset, jumps to adjacent.
+- **Scroll-padding measurement** (`applyScrollPadding`): on load, measures each table's `<th>` height and sets `scroll-padding-top` on `.split` and `.pane` so f/n/t anchor jumps land below the sticky header.
+- **f/n/t nav click handler**: intercepts clicks on `td.diff_next a`, calls `scrollIntoView` for row targets. For `t` (target is the `<table>` itself), scrolls the container to 0 instead.
 
 ## Font policy
 
@@ -228,6 +239,12 @@ Running `pydiff` with no flags (just `-d`/`-o` as needed) compares `HEAD` agains
 
 Tool is considered feature-complete and bug-free by the user as of this handoff. Recent additions:
 
+- **Diff navigation restored.** `split_diff_table` now preserves difflib's f/n/t nav column (`td.diff_next`) on each pane. IDs are suffixed `_l`/`_r` per pane; `<a>` hrefs rewritten to match. The `__top` id is placed on each pane's `<table>` element. JS intercepts nav clicks: row targets use `scrollIntoView`, `t` (table target) scrolls the container to 0.
+- **Sticky nav + line-number columns.** `td.diff_next` is `position: sticky; left: 0`; `td.diff_header` is `position: sticky; left: var(--nav-width)`. Both stay pinned during horizontal scroll.
+- **Dynamic line-number width.** `max_lineno` is computed from `len(from_lines)` / `len(to_lines)` and passed through to `split_diff_table`, which sets `--lineno-width: calc(Nch + 20px)` on each `<table>`.
+- **Scroll-padding for nav jumps.** JS measures each table's `<th>` height on load and sets `scroll-padding-top` on `.split` and `.pane` so f/n/t jumps land below the sticky header.
+- **Hunk boundary lines.** `split_diff_table` detects line-number gaps between consecutive rows and tags the first row of each new hunk with `class='hunk-boundary'`. CSS draws `border-top: 1px solid #24292f`.
+- **Fullscreen fills viewport.** `.fullscreen .split` max-height bumped to `calc(100vh - 130px)` for file fullscreen, `calc(100vh - 180px)` for target fullscreen.
 - **Modularized layout.** Former single-file `diff.py` split into `gitio.py` (git I/O), `html_render.py` (HTML rendering + difflib post-processing), `cli.py` (argparse), and an `assets/` package for CSS/JS. No backwards-compat shim; all call sites updated. Console-script entry in `pyproject.toml` is `pydiff.cli:main`. Hatchling includes `.css`/`.js` by default — no custom build config needed.
 - **Worktree / uncommitted-changes support.** `-b` defaults to `HEAD`; `-t` defaults to `["."]`. The literal `.` is a sentinel meaning "current working tree" — composed naturally with other refs in multi-target mode (`-t HEAD~1 HEAD .`). New `worktree` ref kind (orange `#fb8500`). New `--untracked` flag adds untracked paths as Added entries when a worktree target is present. `list_changes()` drops the second ref when target is worktree; `show()` reads from disk; `list_untracked()` uses `git ls-files --others --exclude-standard -z`.
 - **Unit tests.** Stdlib `unittest` suite under `tests/test_pydiff.py` (26 tests). Uses `demo_repo/` as fixture with a `WorktreeMutation` context manager for safe mutation. Run via `uv run python -m unittest discover -s tests -v`.

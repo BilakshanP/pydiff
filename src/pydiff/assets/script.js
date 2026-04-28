@@ -14,6 +14,24 @@
         });
     }
 
+    // Measure each table's sticky header once and set scroll-padding-top on
+    // its scroll ancestors so f/n/t anchor jumps land below the header.
+    function applyScrollPadding() {
+        document.querySelectorAll('.file-content').forEach(function(fc) {
+            var th = fc.querySelector('table.diff thead th');
+            if (!th) return;
+            var pad = th.getBoundingClientRect().height + 4;
+            fc.querySelectorAll('.split, .pane').forEach(function(s) {
+                s.style.scrollPaddingTop = pad + 'px';
+            });
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyScrollPadding);
+    } else {
+        applyScrollPadding();
+    }
+
     document.querySelectorAll('.file-content').forEach(function(fc) {
         var split = fc.querySelector('.split:not(.single)');
         if (!split) return;
@@ -67,6 +85,27 @@
         });
         document.addEventListener('mouseup', function() {
             if (dragging) { dragging = false; H.classList.remove('dragging'); }
+        });
+    });
+
+    // In-pane f/n/t nav links. Intercept clicks so the browser scrolls the
+    // diff container rather than the page.
+    document.querySelectorAll('table.diff td.diff_next a').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+            var href = a.getAttribute('href') || '';
+            if (href.charAt(0) !== '#') return;
+            var target = document.getElementById(href.slice(1));
+            if (!target) return;
+            e.preventDefault();
+            // `t` target is the <table> itself — just scroll its container to 0
+            // so the header lands at its natural position (avoids the
+            // scroll-padding-top adding extra gap above it).
+            if (target.tagName === 'TABLE') {
+                var scroller = target.closest('.split:not(.nosync)')
+                    || target.closest('.pane');
+                if (scroller) { scroller.scrollTop = 0; return; }
+            }
+            target.scrollIntoView({ block: 'start', inline: 'nearest' });
         });
     });
 

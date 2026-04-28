@@ -55,21 +55,47 @@ _TR_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.S)
 _CELL_RE = re.compile(r"<(t[dh])\b([^>]*)>(.*?)</\1>", re.S)
 
 
-def split_diff_table(diff_html: str, from_desc: str, to_desc: str) -> tuple[str, str]:
+def split_diff_table(
+    diff_html: str, from_desc: str, to_desc: str, max_lineno: int = 1
+) -> tuple[str, str]:
     """Split HtmlDiff.make_table output into two independent tables (left, right).
 
-    HtmlDiff emits 6 cells per row: [next, lineno, code] x 2. We drop the two
-    'next' nav columns (they're intra-table navigation that breaks once we split)
-    and keep [lineno, code] on each side.
+    HtmlDiff emits 6 cells per row: [next, lineno, code] x 2. We split the row
+    in half but keep the nav column (f/n/t jump links) on each side. IDs and
+    href targets are rewritten with a per-pane suffix so left-pane and
+    right-pane anchors don't collide.
     """
+    # HtmlDiff puts a __top id on the outer <table>; grab that N so we can
+    # reattach the id to each pane's new table for the 't' links.
+    top_m = re.search(r'id="(difflib_chg_to\d+__top)"', diff_html)
+    top_id = top_m.group(1) if top_m else ""
+
     left_rows: list[str] = []
     right_rows: list[str] = []
+    prev_from_line = 0
+    prev_to_line = 0
+
+    def rewrite_ids(cell_attrs: str, cell_content: str, suffix: str) -> tuple[str, str]:
+        # Rewrite any id="difflib_chg_..." on the cell and href="#difflib_chg_..."
+        # inside its content so left/right nav targets stay scoped to their pane.
+        new_attrs = re.sub(
+            r'(id=")(difflib_chg_[^"]+)(")',
+            lambda m: f"{m.group(1)}{m.group(2)}{suffix}{m.group(3)}",
+            cell_attrs,
+        )
+        new_content = re.sub(
+            r'(href="#)(difflib_chg_[^"]+)(")',
+            lambda m: f"{m.group(1)}{m.group(2)}{suffix}{m.group(3)}",
+            cell_content,
+        )
+        return new_attrs, new_content
+
     for m in _TR_RE.finditer(diff_html):
         cells: list[tuple[str, str, str]] = _CELL_RE.findall(m.group(1))
         # Hunk separator: a single cell spanning the row
         if len(cells) == 1:
             tag, attrs, content = cells[0]
-            row = f'<tr><{tag} colspan="2"{attrs}>{content}</{tag}></tr>'
+            row = f'<tr><{tag} colspan="3"{attrs}>{content}</{tag}></tr>'
             left_rows.append(row)
             right_rows.append(row)
             continue
@@ -77,29 +103,61 @@ def split_diff_table(diff_html: str, from_desc: str, to_desc: str) -> tuple[str,
             continue  # unknown row shape; skip
 
         # cells: [0]=L-next, [1]=L-lineno, [2]=L-code, [3]=R-next, [4]=R-lineno, [5]=R-code
+        # Detect hunk boundaries: a gap in line numbers on either side means
+        # context was skipped. Tag the row so CSS can draw a separator line.
+        row_class = ""
+        from_num_m = re.search(r">(\d+)<", f">{cells[1][2]}<")
+        to_num_m = re.search(r">(\d+)<", f">{cells[4][2]}<")
+        cur_from = int(from_num_m.group(1)) if from_num_m else 0
+        cur_to = int(to_num_m.group(1)) if to_num_m else 0
+        if prev_from_line and cur_from > prev_from_line + 1:
+            row_class = " class='hunk-boundary'"
+        elif prev_to_line and cur_to > prev_to_line + 1:
+            row_class = " class='hunk-boundary'"
+        if cur_from:
+            prev_from_line = cur_from
+        if cur_to:
+            prev_to_line = cur_to
+
         def mk(
-            cell_lineno: tuple[str, str, str], cell_code: tuple[str, str, str]
+            cell_nav: tuple[str, str, str],
+            cell_lineno: tuple[str, str, str],
+            cell_code: tuple[str, str, str],
+            suffix: str,
         ) -> str:
+            tag_n, attrs_n, content_n = cell_nav
+            attrs_n, content_n = rewrite_ids(attrs_n, content_n, suffix)
             tag_l, attrs_l, content_l = cell_lineno
             tag_c, attrs_c, content_c = cell_code
             # Ensure empty code cells still occupy a full line height so rows align across panes.
             if not content_c.strip():
                 content_c = "&nbsp;"
             return (
-                f"<tr><{tag_l}{attrs_l}>{content_l}</{tag_l}>"
+                f"<tr{row_class}><{tag_n}{attrs_n}>{content_n}</{tag_n}>"
+                f"<{tag_l}{attrs_l}>{content_l}</{tag_l}>"
                 f"<{tag_c}{attrs_c}>{content_c}</{tag_c}></tr>"
             )
 
-        left_rows.append(mk(cells[1], cells[2]))
-        right_rows.append(mk(cells[4], cells[5]))
+        # Left pane keeps original nav cell (has ids + links), suffix "_l".
+        left_rows.append(mk(cells[0], cells[1], cells[2], "_l"))
+        # Right pane builds a nav cell using cells[0]'s id-bearing attrs and
+        # cells[3]'s link content, so the right pane has its own
+        # independently-addressable set of anchors.
+        _, l_attrs, _ = cells[0]
+        tag_r, _, content_r = cells[3]
+        right_nav_cell = (tag_r, l_attrs, content_r)
+        right_rows.append(mk(right_nav_cell, cells[4], cells[5], "_r"))
 
-    def build(rows: list[str], desc: str) -> str:
+    def build(rows: list[str], desc: str, suffix: str) -> str:
+        tid = f' id="{top_id}{suffix}"' if top_id else ""
+        digits = max(len(str(max_lineno)), 2)
+        style = f' style="--lineno-width: calc({digits}ch + 20px)"'
         return (
-            f'<table class="diff"><thead><tr><th colspan="2">{desc}</th></tr></thead>'
+            f'<table class="diff"{tid}{style}><thead><tr><th colspan="3">{desc}</th></tr></thead>'
             f"<tbody>{''.join(rows)}</tbody></table>"
         )
 
-    return build(left_rows, from_desc), build(right_rows, to_desc)
+    return build(left_rows, from_desc, "_l"), build(right_rows, to_desc, "_r")
 
 
 def render_file_block(
@@ -111,8 +169,9 @@ def render_file_block(
     from_desc: str,
     to_desc: str,
     status: str,
+    max_lineno: int,
 ) -> str:
-    left, right = split_diff_table(diff_html, from_desc, to_desc)
+    left, right = split_diff_table(diff_html, from_desc, to_desc, max_lineno)
     summary = (
         f"<summary class='file-header' id='{anchor}' style='border-top: 3px solid {color};'>"
         f"<span><span class='status-chip' style='background:{color}'>{label}</span>"
@@ -274,6 +333,7 @@ def render(args: argparse.Namespace) -> None:
                     from_desc,
                     to_desc,
                     status,
+                    max(len(from_lines), len(to_lines), 1),
                 )
             )
 
