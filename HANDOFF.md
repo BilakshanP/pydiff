@@ -83,7 +83,7 @@ uv run python -m unittest discover -s tests -v
 1. Resolve each ref via `git rev-parse --verify`. The sentinel `.` (worktree) is short-circuited: `resolve()` returns `"."` unchanged without calling git.
 2. Classify ref as branch / remote-branch / tag / commit / worktree via `git rev-parse --symbolic-full-name` (with special-cases: `.` → worktree; `HEAD` and anything containing `~^@:` → commit).
 3. Enumerate changes: `git diff --name-status -M -z <base> <target>` → list of `(status, old_path, new_path)`. When target is worktree (`.`), the second ref is dropped so git compares against the working tree. When `--untracked` is set on a worktree target, `git ls-files --others --exclude-standard -z` is merged in as `A` entries.
-4. Fetch blobs: `git show <ref>:<path>` for refs; for the worktree sentinel, read `os.path.join(repo, path)` directly. Binary detection via `\0` in first 8KB (bytes on disk, str for git show). Missing-file / UnicodeDecodeError return sentinel strings.
+4. Fetch blobs: `git show <ref>:<path>` for refs; for the worktree sentinel, resolve the repo root via `toplevel()` (`git rev-parse --show-toplevel`) and read from disk. Binary detection via `\0` in first 8KB (bytes on disk, str for git show). Missing-file / UnicodeDecodeError return sentinel strings.
 5. Generate diff HTML: `difflib.HtmlDiff().make_table(from_lines, to_lines, ...)`.
 6. **Post-process** the single table into two independent tables (`split_diff_table`):
    - `HtmlDiff` emits 6 cells per row: `[L-next, L-lineno, L-code, R-next, R-lineno, R-code]`.
@@ -103,13 +103,14 @@ WORKTREE_SENTINEL: str = "."                  # target value meaning "current wo
 REF_KIND: dict[str, tuple[str, str]]          # kind -> (label, color); includes "worktree"
 
 def git(repo: str, *args: str) -> str
+def toplevel(repo: str) -> str              # git rev-parse --show-toplevel
 def is_worktree(ref: str) -> bool
 def resolve(repo: str, ref: str) -> str       # returns "." unchanged for worktree
 def classify(repo: str, ref: str) -> str      # branch|remote-branch|tag|commit|worktree
 def ref_chip(kind: str) -> str
 def list_changes(repo: str, a: str, b: str) -> list[tuple[str, str, str]]
 def list_untracked(repo: str) -> list[str]    # git ls-files --others --exclude-standard
-def show(repo: str, ref: str, path: str) -> list[str]  # reads from disk if ref == "."
+def show(repo: str, ref: str, path: str) -> list[str]  # reads from toplevel(repo) if ref == "."
 ```
 
 `pydiff/html_render.py`:
@@ -158,8 +159,8 @@ def main() -> None
 
 Each pane's `<table class="diff">` has 3 columns per row: `[diff_next, diff_header, code]`.
 
-- **`td.diff_next`** — f/n/t navigation column. `position: sticky; left: 0; z-index: 3`. IDs are suffixed `_l` / `_r` per pane so anchors don't collide. Links rewritten to match.
-- **`td.diff_header`** — line numbers. `position: sticky; left: var(--nav-width, 25px); z-index: 2`. Width set per-table via `--lineno-width: calc(Nch + 20px)` where N = `len(str(max_lineno))`.
+- **`td.diff_next`** — f/n/t navigation column. `position: sticky; left: 0; z-index: 3`. 16px wide, compact padding (`0 2px`), no bold. IDs are suffixed `_l` / `_r` per pane so anchors don't collide. Links rewritten to match.
+- **`td.diff_header`** — line numbers. `position: sticky; left: 16px; z-index: 2`. Light background (`#f6f8fa`), muted color (`#6e7781`). Width set per-table via `--lineno-width: calc(Nch + 16px)` where N = `len(str(max_lineno))`. Default 40px.
 - **`tr.hunk-boundary`** — rows where line numbers jump (context gap). Detected by comparing consecutive line numbers in `split_diff_table`. CSS draws `border-top: 1px solid #24292f`.
 - **`<table>` id** — `difflib_chg_toN__top_{l,r}` preserved from difflib for `t` (top) navigation.
 
@@ -179,7 +180,7 @@ All scoped to `.file-content` parent (not to `<summary>` — buttons inside `<su
 - **View toggle** (data-view=both|left|right): adds/removes `.hidden`/`.solo` classes on panes + `.hidden` on handle.
 - **Sync toggle** (data-sync-toggle): toggles `.nosync` class on `.split`, updates button label "Sync: on"/"Sync: off", transfers scroll position.
 - **Drag handle**: mousedown/move/up, clamped 10–90%, only active when `data-view === 'both'`. Sets `flex-basis` on both panes.
-- **Fullscreen toggle** (data-expand): toggles `.fullscreen` on closest `.file-container` or `.target-section`. Only one at a time. Esc to exit. Icon swaps `⛶` ↔ `✕`. Fullscreen bumps `.split` max-height to `calc(100vh - 130px)` (file) or `calc(100vh - 180px)` (target).
+- **Fullscreen toggle** (data-expand): toggles `.fullscreen` on closest `.file-container` or `.target-section`. Only one at a time. Esc to exit. Icon swaps `⛶` ↔ `✕`. File fullscreen uses flex layout: `.file-content` becomes a flex column, `.split` fills remaining space via `flex: 1`. JS measures file-header height and sets `--fs-header-h` CSS var. Target fullscreen uses `calc(100vh - 180px)` max-height. **Do NOT set `display: flex` on the `<details>` element itself** — it breaks native open/close rendering.
 - **Target prev/next FAB**: shown only when >1 targets; finds the current target by scroll position + offset, jumps to adjacent.
 - **Scroll-padding measurement** (`applyScrollPadding`): on load, measures each table's `<th>` height and sets `scroll-padding-top` on `.split` and `.pane` so f/n/t anchor jumps land below the sticky header.
 - **f/n/t nav click handler**: intercepts clicks on `td.diff_next a`, calls `scrollIntoView` for row targets. For `t` (target is the `<table>` itself), scrolls the container to 0 instead.
@@ -240,15 +241,17 @@ Running `pydiff` with no flags (just `-d`/`-o` as needed) compares `HEAD` agains
 Tool is considered feature-complete and bug-free by the user as of this handoff. Recent additions:
 
 - **Diff navigation restored.** `split_diff_table` now preserves difflib's f/n/t nav column (`td.diff_next`) on each pane. IDs are suffixed `_l`/`_r` per pane; `<a>` hrefs rewritten to match. The `__top` id is placed on each pane's `<table>` element. JS intercepts nav clicks: row targets use `scrollIntoView`, `t` (table target) scrolls the container to 0.
-- **Sticky nav + line-number columns.** `td.diff_next` is `position: sticky; left: 0`; `td.diff_header` is `position: sticky; left: var(--nav-width)`. Both stay pinned during horizontal scroll.
-- **Dynamic line-number width.** `max_lineno` is computed from `len(from_lines)` / `len(to_lines)` and passed through to `split_diff_table`, which sets `--lineno-width: calc(Nch + 20px)` on each `<table>`.
+- **Sticky nav + line-number columns.** `td.diff_next` is `position: sticky; left: 0` (16px wide, compact); `td.diff_header` is `position: sticky; left: 16px` (light bg, muted color). Both stay pinned during horizontal scroll. Diff font size is 12px.
+- **Dynamic line-number width.** `max_lineno` is computed from `len(from_lines)` / `len(to_lines)` and passed through to `split_diff_table`, which sets `--lineno-width: calc(Nch + 16px)` on each `<table>`.
 - **Scroll-padding for nav jumps.** JS measures each table's `<th>` height on load and sets `scroll-padding-top` on `.split` and `.pane` so f/n/t jumps land below the sticky header.
 - **Hunk boundary lines.** `split_diff_table` detects line-number gaps between consecutive rows and tags the first row of each new hunk with `class='hunk-boundary'`. CSS draws `border-top: 1px solid #24292f`.
-- **Fullscreen fills viewport.** `.fullscreen .split` max-height bumped to `calc(100vh - 130px)` for file fullscreen, `calc(100vh - 180px)` for target fullscreen.
+- **Fullscreen fills viewport.** File fullscreen uses flex layout (`.file-content` as flex column, `.split` with `flex: 1`) instead of hardcoded max-height — avoids blank bottom. JS sets `--fs-header-h` CSS var from measured header height. Target fullscreen uses `calc(100vh - 180px)`. **Do NOT set `display: flex` on `<details>`** — breaks native rendering.
 - **Modularized layout.** Former single-file `diff.py` split into `gitio.py` (git I/O), `html_render.py` (HTML rendering + difflib post-processing), `cli.py` (argparse), and an `assets/` package for CSS/JS. No backwards-compat shim; all call sites updated. Console-script entry in `pyproject.toml` is `pydiff.cli:main`. Hatchling includes `.css`/`.js` by default — no custom build config needed.
-- **Worktree / uncommitted-changes support.** `-b` defaults to `HEAD`; `-t` defaults to `["."]`. The literal `.` is a sentinel meaning "current working tree" — composed naturally with other refs in multi-target mode (`-t HEAD~1 HEAD .`). New `worktree` ref kind (orange `#fb8500`). New `--untracked` flag adds untracked paths as Added entries when a worktree target is present. `list_changes()` drops the second ref when target is worktree; `show()` reads from disk; `list_untracked()` uses `git ls-files --others --exclude-standard -z`.
+- **Worktree / uncommitted-changes support.** `-b` defaults to `HEAD`; `-t` defaults to `["."]`. The literal `.` is a sentinel meaning "current working tree" — composed naturally with other refs in multi-target mode (`-t HEAD~1 HEAD .`). New `worktree` ref kind (orange `#fb8500`). New `--untracked` flag adds untracked paths as Added entries when a worktree target is present. `list_changes()` drops the second ref when target is worktree; `show()` reads from disk via `toplevel()`; `list_untracked()` uses `git ls-files --others --exclude-standard -z`.
 - **Unit tests.** Stdlib `unittest` suite under `tests/test_pydiff.py` (26 tests). Uses `demo_repo/` as fixture with a `WorktreeMutation` context manager for safe mutation. Run via `uv run python -m unittest discover -s tests -v`.
 - **`build_parser()` factored out** of `main()` so tests can parse args without invoking the tool.
+- **Worktree file-read bug fixed.** `show()` previously joined the raw `-d` path with git diff paths. Since git returns paths relative to the repo toplevel, this broke when `-d` was not the repo root. Now uses `toplevel(repo)` to resolve the absolute root first.
+- **Sleeker nav/line-number styling.** Nav column slimmed from 25px to 16px, bold removed, padding tightened. Line numbers lightened to `#f6f8fa` bg / `#6e7781` color. Diff font size 13px to 12px. Sticky positioning preserved.
 
 Prior changes kept from earlier sessions: doctype added, fonts made generic-only, type hints added throughout, repo-name shown as basename, full basedpyright cleanup (argparse fields cast through `typing.cast`, unused call results assigned to `_`, implicit string concatenations replaced with explicit `+`, `_CELL_RE.findall` result annotated as `list[tuple[str, str, str]]`), ruff cleanup (removed 7 extraneous `f` prefixes from non-interpolated strings, applied `ruff format`), added `.gitignore`, removed `bk/` backups and `report_all.html` for GitHub push.
 

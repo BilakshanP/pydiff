@@ -25,6 +25,7 @@ from pydiff.gitio import (
     ref_chip,
     resolve,
     show,
+    toplevel,
 )
 
 
@@ -224,7 +225,7 @@ def render(args: argparse.Namespace) -> None:
 
     base_kind = classify(repo, base)
     try:
-        repo_path = git(repo, "rev-parse", "--show-toplevel").strip()
+        repo_path = toplevel(repo)
     except subprocess.CalledProcessError:
         repo_path = os.path.abspath(repo)
     repo_name = os.path.basename(repo_path) or repo_path

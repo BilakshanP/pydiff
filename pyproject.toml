@@ -1,6 +1,6 @@
 [project]
 name = "pydiff"
-version = "0.1.0"
+version = "0.1.1"
 description = "Self-contained HTML diff report generator for git refs"
 requires-python = ">=3.14"
 dependencies = []

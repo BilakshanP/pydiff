@@ -33,6 +33,11 @@ def git(repo: str, *args: str) -> str:
     ).stdout
 
 
+def toplevel(repo: str) -> str:
+    """Return the absolute path to the repo's working tree root."""
+    return git(repo, "rev-parse", "--show-toplevel").strip()
+
+
 def is_worktree(ref: str) -> bool:
     return ref == WORKTREE_SENTINEL
 
@@ -101,7 +106,7 @@ def list_untracked(repo: str) -> list[str]:
 
 def show(repo: str, ref: str, path: str) -> list[str]:
     if is_worktree(ref):
-        full = os.path.join(repo, path)
+        full = os.path.join(toplevel(repo), path)
         try:
             with open(full, "rb") as f:
                 raw = f.read()
