@@ -106,3 +106,47 @@ td.diff_sub { background-color: #ffb3b3; }
 span.diff_add { background-color: #2da44e; color: #fff; border-radius: 3px; padding: 1px; font-weight: bold; }
 span.diff_sub { background-color: #cf222e; color: #fff; border-radius: 3px; padding: 1px; font-weight: bold; }
 span.diff_chg { background-color: #0969da; color: #fff; border-radius: 3px; padding: 1px; font-weight: bold; }
+
+/* Dark mode: follows OS / browser preference. Saturated accent colors
+   (badges, status chips, inline diff spans) are kept as-is — they read fine
+   on both backgrounds. Only surfaces, borders, and muted text are remapped. */
+@media (prefers-color-scheme: dark) {
+    body { background: #0d1117; color: #c9d1d9; }
+    h1, h2, h3 { border-bottom-color: #21262d; }
+    a { color: #58a6ff; }
+    .summary-card, .target-index, .target-section, .controls { background: #161b22; border-color: #30363d; }
+    .target-section { border-color: #30363d; }
+    .target-section > summary { background: #161b22; }
+    .target-section[open] > summary { border-bottom-color: #30363d; }
+    .target-section > summary::before { color: #8b949e; }
+    .file-header { background: #161b22; border-color: #30363d; }
+    .file-content { background: #0d1117; border-color: #30363d; }
+    .controls { border-bottom-color: #30363d; }
+    .fullscreen { background: #0d1117; }
+    .nav-fab button { background: #161b22; border-color: #30363d; color: #c9d1d9; }
+    .nav-fab button:hover { background: #21262d; }
+    .hdr-btn { background: #21262d; color: #8b949e; border-color: #30363d; }
+    .hdr-btn:hover { background: #30363d; }
+    .hdr-btn.active { background: #0c2d6b; color: #58a6ff; border-color: #1f6feb; }
+    .btn-icon { color: #8b949e; }
+    .btn-icon:hover { background: #21262d; color: #c9d1d9; }
+    .handle { background: #30363d; }
+    .handle:hover, .handle.dragging { background: #58a6ff; }
+
+    table.diff th { background: #161b22; color: #8b949e; border-bottom-color: #30363d; }
+    table.diff td.diff_header { background: #161b22; color: #8b949e; border-right-color: #30363d; }
+    table.diff td.diff_next { background: #161b22; color: #8b949e; border-right-color: #30363d; }
+    table.diff td.diff_next a { color: #8b949e; }
+    table.diff td.diff_next a:hover { color: #58a6ff; }
+    table.diff tr.hunk-boundary td { border-top-color: #8b949e; }
+    table.diff tbody tr:hover td { background-color: #161b22; }
+    table.diff tr td[colspan]:only-child { background: #161b22; color: #8b949e; }
+
+    /* Diff row backgrounds: muted, dark-palette equivalents. */
+    td.diff_add { background-color: #033a16; }
+    td.diff_chg { background-color: #0c2d6b; }
+    td.diff_sub { background-color: #67060c; }
+    table.diff tbody tr:hover td.diff_add { background-color: #0a4d1f; }
+    table.diff tbody tr:hover td.diff_chg { background-color: #103e8f; }
+    table.diff tbody tr:hover td.diff_sub { background-color: #8a0c14; }
+}
