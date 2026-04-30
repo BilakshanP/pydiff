@@ -164,4 +164,31 @@
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') exitFullscreen();
     });
+
+    // File prev/next navigation in fullscreen
+    function fsNavigate(delta) {
+        if (!fsCurrent || !fsCurrent.classList.contains('file-container')) return;
+        var siblings = Array.prototype.slice.call(
+            fsCurrent.parentElement.querySelectorAll(':scope > .file-container')
+        );
+        var idx = siblings.indexOf(fsCurrent) + delta;
+        if (idx < 0 || idx >= siblings.length) return;
+        var target = siblings[idx];
+        exitFullscreen();
+        // Enter fullscreen on the target
+        target.classList.add('fullscreen');
+        if (!target.open) target.open = true;
+        var btn = target.querySelector(':scope > summary [data-expand]');
+        if (btn) btn.textContent = '✕';
+        fsCurrent = target;
+        document.body.classList.add('has-fullscreen');
+        var hdr = target.querySelector(':scope > .file-header');
+        if (hdr) target.style.setProperty('--fs-header-h', hdr.offsetHeight + 'px');
+    }
+    document.querySelectorAll('[data-fs-prev]').forEach(function(b) {
+        b.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); fsNavigate(-1); });
+    });
+    document.querySelectorAll('[data-fs-next]').forEach(function(b) {
+        b.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); fsNavigate(1); });
+    });
 })();

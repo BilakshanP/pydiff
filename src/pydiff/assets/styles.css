@@ -37,6 +37,8 @@ a:hover { text-decoration: underline; }
    (minus ~130px of chrome for the summary + controls) so diffs actually
    use the screen. */
 .fullscreen { position: fixed !important; inset: 0 !important; z-index: 1000 !important; background: #fff; overflow: hidden; margin: 0 !important; border-radius: 0 !important; border: none !important; padding: 0 !important; }
+.fullscreen > .file-header { border-radius: 0; border-left: none; border-right: none; border-top: none; }
+.fullscreen > .file-content { border-left: none; border-right: none; border-bottom: none; border-radius: 0; }
 .fullscreen.file-container > .file-content { display: flex; flex-direction: column; height: calc(100vh - var(--fs-header-h, 42px)); }
 .fullscreen.file-container > .file-content > .controls { flex: 0 0 auto; }
 .fullscreen.file-container > .file-content > .split { flex: 1 1 0; min-height: 0; max-height: none; }
@@ -60,6 +62,9 @@ body.has-fullscreen { overflow: hidden; }
 .hdr-btn.active { background: #ddeeff; color: #0969da; border-color: #0969da; }
 .btn-icon { border: none !important; background: transparent; padding: 4px 8px; font-size: 22px; line-height: 1; color: #57606a; }
 .btn-icon:hover { background: #eaeef2; color: #24292f; }
+.fs-nav { display: none; }
+.fullscreen .fs-nav { display: inline-block; }
+.fullscreen .top-link { display: none; }
 
 /* Split view container.
    Default (sync on): outer box scrolls vertically; panes only scroll horizontally. Native, smooth.

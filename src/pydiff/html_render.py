@@ -178,8 +178,10 @@ def render_file_block(
         f"<span><span class='status-chip' style='background:{color}'>{label}</span>"
         f"<strong>{header}</strong></span>"
         f"<span class='hdr-controls'>"
+        f"<button class='hdr-btn btn-icon fs-nav' data-fs-prev title='Previous file' onclick='event.stopPropagation();'>&#8592;</button>"
+        f"<button class='hdr-btn btn-icon fs-nav' data-fs-next title='Next file' onclick='event.stopPropagation();'>&#8594;</button>"
         f"<button class='hdr-btn btn-icon' data-expand title='Fullscreen' onclick='event.stopPropagation();'>⛶</button>"
-        f"<a class='hdr-btn' href='#' onclick='event.stopPropagation();'>&#8593; Top</a>"
+        f"<a class='hdr-btn top-link' href='#' onclick='event.stopPropagation();'>&#8593; Top</a>"
         f"</span></summary>"
     )
     # Single-pane modes: no controls, no handle, no JS interaction needed.
