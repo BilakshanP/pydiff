@@ -7,19 +7,22 @@ A small CLI that generates a self-contained HTML report comparing git refs — b
 - Compare any two git refs (branch, tag, commit SHA, `HEAD~N`, `origin/main`, …).
 - Compare a ref against the **current worktree** (uncommitted changes) using `.` as the target.
 - Compare one base against multiple targets in a single report.
-- Detects **Added / Modified / Deleted / Renamed** files.
+- **Walk mode**: step through per-commit diffs between two refs with `← →` navigation.
+- Detects **Added / Modified / Deleted / Renamed / Untracked** files.
 - Labels each ref in the report as **branch**, **remote**, **tag**, **commit**, or **worktree**.
 - Side-by-side diffs with inline add/remove/change highlighting.
+- **Tree-structured TOC** grouping files by directory (collapsible folders, single-file dirs inlined).
 - Per-file controls: **Both / Left only / Right only** view, **Sync scroll** toggle (preserves scroll position across toggles), draggable resize handle.
-- Per-file and per-target **fullscreen** toggle (Esc to exit).
+- Per-file and per-target **fullscreen** toggle (Esc to exit), with **← → file navigation** in fullscreen.
 - Per-target collapsible sections; prev / next target navigation when multiple targets are present.
 - Context-only view by default; optional full-file view.
+- **Dark mode** — automatic via `prefers-color-scheme`.
 - Binary and non-UTF-8 files are detected and skipped.
 - Zero third-party dependencies — pure Python 3 standard library.
 
 ## Requirements
 
-- Python 3.7+
+- Python 3.14+
 - `git` on `PATH`
 
 ## Install
@@ -52,7 +55,8 @@ With no flags, compares `HEAD` against the current worktree (uncommitted changes
 | `-o`, `--out` | `diff_report.html` | Output HTML path |
 | `-c`, `--context` | `5` | Context lines around each change |
 | `--full` | off | Show entire file instead of context-only |
-| `--untracked` | off | When a worktree target is present, also include untracked files as Added |
+| `--untracked` | off | When a worktree target is present, also include untracked files as Untracked |
+| `--walk` | off | Walk mode: `--walk FROM TO` steps through per-commit diffs between two refs |
 
 ## Examples
 
@@ -101,6 +105,16 @@ Show full files with wider context:
 pydiff -b main -t dev --full -c 10
 ```
 
+Walk through per-commit diffs between two refs:
+```
+pydiff --walk HEAD~5 HEAD
+```
+
+Walk between two branches:
+```
+pydiff -d ~/code/myrepo --walk main feature/new-api -o walk.html
+```
+
 ## Output
 
 The generated HTML contains:
@@ -121,7 +135,7 @@ Pure adds/deletes render with only the relevant side shown.
 ## How it works
 
 1. Resolves each ref via `git rev-parse --verify` (except `.`, which is a literal sentinel for the worktree).
-2. Enumerates changed files and their statuses via `git diff --name-status -M -z <base> <target>`; when the target is the worktree, the second ref is dropped so git compares against the working tree. With `--untracked`, also merges in paths from `git ls-files --others --exclude-standard` as Added.
+2. Enumerates changed files and their statuses via `git diff --name-status -M -z <base> <target>`; when the target is the worktree, the second ref is dropped so git compares against the working tree. With `--untracked`, also merges in paths from `git ls-files --others --exclude-standard` as Untracked.
 3. For each change, reads both sides via `git show <ref>:<path>` for git refs, or directly from disk for worktree paths, and feeds the line lists into `difflib.HtmlDiff.make_table`.
 4. Post-processes the result into two independent tables (left / right panes) and emits a single self-contained HTML file.
 
