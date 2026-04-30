@@ -34,6 +34,7 @@ STATUS_STYLE: dict[str, tuple[str, str, str]] = {
     "M": ("Modified", "#bf8700", "badge-mod"),
     "D": ("Deleted", "#cf222e", "badge-del"),
     "R": ("Renamed", "#8250df", "badge-ren"),
+    "U": ("Untracked", "#0969da", "badge-unt"),
 }
 
 
@@ -185,7 +186,7 @@ def render_file_block(
         f"</span></summary>"
     )
     # Single-pane modes: no controls, no handle, no JS interaction needed.
-    if status == "A":
+    if status in ("A", "U"):
         body = f"<div class='file-content'><div class='split single'><div class='pane solo'><div class='pane-inner'>{right}</div></div></div></div>"
     elif status == "D":
         body = f"<div class='file-content'><div class='split single'><div class='pane solo'><div class='pane-inner'>{left}</div></div></div></div>"
@@ -207,6 +208,74 @@ def render_file_block(
             f"</div></div>"
         )
     return f"<details class='file-container' open>{summary}{body}</details>"
+
+
+def _build_toc_tree(changes: list[tuple[str, str, str]], target: str) -> str:
+    """Build a tree-structured TOC grouping files by directory."""
+
+    # Build a nested dict: each node has "files" and "dirs".
+    root: dict[str, object] = {"files": [], "dirs": {}}
+    for status, old, new in changes:
+        parts = new.split("/")
+        node: dict[str, object] = root
+        for seg in parts[:-1]:
+            dirs = cast(dict[str, object], node["dirs"])
+            if seg not in dirs:
+                dirs[seg] = {"files": [], "dirs": {}}
+            node = cast(dict[str, object], dirs[seg])
+        cast(list[tuple[str, str, str, str]], node["files"]).append(
+            (status, old, new, parts[-1])
+        )
+
+    def _file_html(status: str, old: str, new: str, filename: str) -> str:
+        color = STATUS_STYLE[status][1]
+        display = html.escape(filename if status != "R" else f"{old} → {new}")
+        return (
+            f"<div class='toc-entry'><span style='color:{color}'>[{status}]</span> "
+            + f"<a href='#{anchor_id(target, new)}'>{display}</a></div>"
+        )
+
+    def _render_node(node: dict[str, object], prefix: str) -> list[str]:
+        lines: list[str] = []
+        files = cast(list[tuple[str, str, str, str]], node["files"])
+        dirs = cast(dict[str, object], node["dirs"])
+        # Collapse single-child dirs: if a dir has no files and exactly one
+        # subdir, merge them into "parent/child/".
+        for name in sorted(dirs.keys()):
+            child = cast(dict[str, object], dirs[name])
+            label = name
+            cur = child
+            while (
+                not cast(list[object], cur["files"])
+                and len(cast(dict[str, object], cur["dirs"])) == 1
+            ):
+                only = next(iter(cast(dict[str, object], cur["dirs"])))
+                label += "/" + only
+                cur = cast(
+                    dict[str, object], cast(dict[str, object], cur["dirs"])[only]
+                )
+            child_files = cast(list[tuple[str, str, str, str]], cur["files"])
+            child_dirs = cast(dict[str, object], cur["dirs"])
+            # Single file, no subdirs: inline without collapsible
+            if len(child_files) == 1 and not child_dirs:
+                s, o, n, fn = child_files[0]
+                color = STATUS_STYLE[s][1]
+                display = html.escape(fn if s != "R" else f"{o} → {n}")
+                lines.append(
+                    f"<div class='toc-entry'><span style='color:{color}'>[{s}]</span> "
+                    + f"<a href='#{anchor_id(target, n)}'>{html.escape(label)}/{display}</a></div>"
+                )
+            else:
+                lines.append(
+                    f"<details class='toc-dir' open><summary>{html.escape(label)}/</summary>"
+                )
+                lines.extend(_render_node(cur, prefix + label + "/"))
+                lines.append("</details>")
+        for status, old, new, filename in files:
+            lines.append(_file_html(status, old, new, filename))
+        return lines
+
+    return "\n".join(_render_node(root, ""))
 
 
 def render(args: argparse.Namespace) -> None:
@@ -279,8 +348,8 @@ def render(args: argparse.Namespace) -> None:
             existing = {c[2] for c in changes}
             for p in list_untracked(repo):
                 if p not in existing:
-                    changes.append(("A", p, p))
-        counts = {"A": 0, "M": 0, "D": 0, "R": 0}
+                    changes.append(("U", p, p))
+        counts = {"A": 0, "M": 0, "D": 0, "R": 0, "U": 0}
         for status, _, _ in changes:
             counts[status] = counts.get(status, 0) + 1
 
@@ -292,30 +361,26 @@ def render(args: argparse.Namespace) -> None:
         out.append("<div class='target-body'>")
 
         out.append("<div class='summary-card'><h3>Summary</h3><div>")
-        for code in ("A", "M", "D", "R"):
+        for code in ("A", "M", "D", "R", "U"):
             label, _, cls = STATUS_STYLE[code]
             out.append(f"<span class='badge {cls}'>{counts[code]} {label}</span> ")
         out.append("</div>")
 
         if changes:
-            out.append("<h4>Table of Contents</h4><ul class='toc-list'>")
-            for status, old, new in changes:
-                label, color, _ = STATUS_STYLE[status]
-                display = html.escape(new if status != "R" else f"{old} → {new}")
-                out.append(
-                    f"<li><span style='color:{color}'>[{status}]</span> "
-                    + f"<a href='#{anchor_id(target, new)}'>{display}</a></li>"
-                )
-            out.append("</ul>")
+            out.append(
+                "<h4>Table of Contents</h4><div class='toc-tree'>"
+                + _build_toc_tree(changes, target)
+                + "</div>"
+            )
         else:
             out.append("<p><i>No changes.</i></p>")
         out.append("</div>")
 
         for status, old, new in changes:
             label, color, _ = STATUS_STYLE[status]
-            from_lines = show(repo, base_sha, old) if status != "A" else []
+            from_lines = show(repo, base_sha, old) if status not in ("A", "U") else []
             to_lines = show(repo, target_sha, new) if status != "D" else []
-            from_desc = html.escape(f"{base}:{old}" if status != "A" else "Not present")
+            from_desc = html.escape(f"{base}:{old}" if status not in ("A", "U") else "Not present")
             to_desc = html.escape(f"{target}:{new}" if status != "D" else "Deleted")
             header = html.escape(f"{old} → {new}" if status == "R" else new)
             diff_html = differ.make_table(

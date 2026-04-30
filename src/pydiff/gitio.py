@@ -98,8 +98,9 @@ def list_changes(repo: str, a: str, b: str) -> list[tuple[str, str, str]]:
 
 
 def list_untracked(repo: str) -> list[str]:
-    """Return paths of untracked files, honoring .gitignore."""
-    out = git(repo, "ls-files", "--others", "--exclude-standard", "-z")
+    """Return paths of untracked files relative to the repo root, honoring .gitignore."""
+    root = toplevel(repo)
+    out = git(root, "ls-files", "--others", "--exclude-standard", "-z")
     parts = out.split("\0")
     return [p for p in parts if p]
 
