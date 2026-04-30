@@ -31,7 +31,7 @@ A Python 3 CLI (`pydiff`) that generates a self-contained HTML report comparing 
 
 From git (for end users):
 ```
-pip install git+https://github.com/USER/pydiff.git
+pip install git+https://github.com/bilakshanp/pydiff.git
 ```
 
 For development:

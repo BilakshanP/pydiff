@@ -29,7 +29,7 @@ A small CLI that generates a self-contained HTML report comparing git refs — b
 
 From git:
 ```
-pip install git+https://github.com/USER/pydiff.git
+pip install git+https://github.com/bilakshanp/pydiff.git
 ```
 
 For development:
