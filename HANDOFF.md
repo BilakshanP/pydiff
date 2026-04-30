@@ -78,11 +78,16 @@ Unit tests (stdlib unittest, uses demo_repo as fixture):
 uv run python -m unittest discover -s tests -v
 ```
 
+For walk mode:
+```
+uv run pydiff -d demo_repo --walk HEAD~2 HEAD -o /tmp/walk.html --verbose
+```
+
 ## Architecture
 
 1. Resolve each ref via `git rev-parse --verify`. The sentinel `.` (worktree) is short-circuited: `resolve()` returns `"."` unchanged without calling git.
 2. Classify ref as branch / remote-branch / tag / commit / worktree via `git rev-parse --symbolic-full-name` (with special-cases: `.` → worktree; `HEAD` and anything containing `~^@:` → commit).
-3. Enumerate changes: `git diff --name-status -M -z <base> <target>` → list of `(status, old_path, new_path)`. When target is worktree (`.`), the second ref is dropped so git compares against the working tree. When `--untracked` is set on a worktree target, `git ls-files --others --exclude-standard -z` is merged in as `A` entries.
+3. Enumerate changes: `git diff --name-status -M -z <base> <target>` → list of `(status, old_path, new_path)`. When target is worktree (`.`), the second ref is dropped so git compares against the working tree. When `--untracked` is set on a worktree target, `git ls-files --others --exclude-standard -z` is merged in as `U` (Untracked) entries.
 4. Fetch blobs: `git show <ref>:<path>` for refs; for the worktree sentinel, resolve the repo root via `toplevel()` (`git rev-parse --show-toplevel`) and read from disk. Binary detection via `\0` in first 8KB (bytes on disk, str for git show). Missing-file / UnicodeDecodeError return sentinel strings.
 5. Generate diff HTML: `difflib.HtmlDiff().make_table(from_lines, to_lines, ...)`.
 6. **Post-process** the single table into two independent tables (`split_diff_table`):
@@ -109,6 +114,7 @@ def resolve(repo: str, ref: str) -> str       # returns "." unchanged for worktr
 def classify(repo: str, ref: str) -> str      # branch|remote-branch|tag|commit|worktree
 def ref_chip(kind: str) -> str
 def list_changes(repo: str, a: str, b: str) -> list[tuple[str, str, str]]
+def list_commits(repo: str, from_ref: str, to_ref: str) -> list[tuple[str, str, str, str, str]]
 def list_untracked(repo: str) -> list[str]    # git ls-files --others --exclude-standard
 def show(repo: str, ref: str, path: str) -> list[str]  # reads from toplevel(repo) if ref == "."
 ```
@@ -121,8 +127,10 @@ JS_SCRIPT: str                                 # loaded from pydiff/assets/scrip
 
 def anchor_id(ref_label: str, path: str) -> str
 def split_diff_table(diff_html: str, from_desc: str, to_desc: str, max_lineno: int) -> tuple[str, str]
+def _build_toc_tree(changes: list[...], target: str) -> str
 def render_file_block(..., max_lineno: int) -> str
 def render(args: argparse.Namespace) -> None
+def render_walk(args: argparse.Namespace) -> None
 ```
 
 `pydiff/cli.py`:
@@ -139,7 +147,7 @@ def main() -> None
   <div class='target-body'>
     <div class='summary-card'>… badges … TOC …</div>
     <details class='file-container' open>
-      <summary class='file-header'>[status-chip filename] [⛶] [↑ Top]</summary>
+      <summary class='file-header'>[status-chip filename] [← →] [⛶] [↑ Top]</summary>
       <div class='file-content'>
         <div class='controls'>[Both][Left only][Right only][Sync: on]</div>  <!-- only for M/R -->
         <div class='split' data-view='both'>
@@ -222,7 +230,9 @@ Do not add named fonts (Roboto, Segoe UI, Consolas, etc).
 -o/--out       default "diff_report.html"
 -c/--context   default 5, context lines
 --full         full files instead of context-only
---untracked    include untracked files as Added (only meaningful when a worktree target is present)
+--untracked    include untracked files as Untracked [U] (only meaningful when a worktree target is present)
+--walk         walk mode: --walk FROM TO steps through per-commit diffs between two refs
+--verbose      print progress to stderr
 ```
 
 Directory-diff mode was intentionally **removed** — tool is git-only now.
@@ -231,10 +241,10 @@ Running `pydiff` with no flags (just `-d`/`-o` as needed) compares `HEAD` agains
 
 ## If user asks for…
 
-- **Dark mode**: not implemented. Would be ~15 lines of `prefers-color-scheme` CSS.
+- **Dark mode**: implemented via `prefers-color-scheme: dark` media query. Auto, no toggle.
 - **Port to Rust**: discussed and deferred. User chose to keep Python. `difflib.HtmlDiff` has no direct Rust equivalent — would need `similar` crate + custom HTML rendering.
 - **Patch-file mode (`diff -u` input)**: discussed and deferred. Would require a separate hunk-based renderer since `HtmlDiff` needs both full file contents.
-- **Dark mode / palette / different look**: not done; user signalled "feature complete".
+- **Syntax highlighting**: discussed and skipped. Span nesting conflict with difflib's diff spans makes it disproportionately complex for marginal benefit.
 
 ## Last-known-good state
 
@@ -252,6 +262,12 @@ Tool is considered feature-complete and bug-free by the user as of this handoff.
 - **`build_parser()` factored out** of `main()` so tests can parse args without invoking the tool.
 - **Worktree file-read bug fixed.** `show()` previously joined the raw `-d` path with git diff paths. Since git returns paths relative to the repo toplevel, this broke when `-d` was not the repo root. Now uses `toplevel(repo)` to resolve the absolute root first.
 - **Sleeker nav/line-number styling.** Nav column slimmed from 25px to 16px, bold removed, padding tightened. Line numbers lightened to `#f6f8fa` bg / `#6e7781` color. Diff font size 13px to 12px. Sticky positioning preserved.
+- **Dark mode.** `@media (prefers-color-scheme: dark)` block in CSS. GitHub-dark palette: `#0d1117` body, `#161b22` panels, `#30363d` borders, `#c9d1d9` text. Diff row backgrounds: `#033a16` add, `#0c2d6b` chg, `#67060c` sub. Saturated accent colors kept as-is.
+- **File fullscreen navigation.** `← →` buttons (`.fs-nav`) in file header, hidden by default, shown in fullscreen. `↑ Top` link hidden in fullscreen. JS `fsNavigate()` switches fullscreen between sibling `.file-container` elements.
+- **Tree-structured TOC.** `_build_toc_tree()` groups files by directory into nested collapsible `<details>` elements. Single-child dirs collapsed (`a/b/c/` merged). Single-file dirs inlined without collapsible wrapper.
+- **Untracked files as `[U]`.** Distinct from Added `[A]`. Blue color `#0969da`, badge class `badge-unt`. `list_untracked()` runs from `toplevel(repo)` to return toplevel-relative paths.
+- **Walk mode (`--walk FROM TO`).** `list_commits()` in `gitio.py` enumerates commits via `git log --reverse`. `render_walk()` in `html_render.py` generates per-step diffs (consecutive commit pairs). Sticky walk bar with `← →` nav, commit hash/subject/author/date, step counter. Collapsible commit index for direct jump. Steps shown/hidden via JS. Incompatible with `-b`/`-t`/`--untracked`.
+- **`--verbose` flag.** Prints progress to stderr: ref resolution, per-target/step info with file counts, per-file progress. Without flag, only final `✅` line prints.
 
 Prior changes kept from earlier sessions: doctype added, fonts made generic-only, type hints added throughout, repo-name shown as basename, full basedpyright cleanup (argparse fields cast through `typing.cast`, unused call results assigned to `_`, implicit string concatenations replaced with explicit `+`, `_CELL_RE.findall` result annotated as `list[tuple[str, str, str]]`), ruff cleanup (removed 7 extraneous `f` prefixes from non-interpolated strings, applied `ruff format`), added `.gitignore`, removed `bk/` backups and `report_all.html` for GitHub push.
 
