@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
-from pydiff.html_render import render
+from pydiff.html_render import render, render_walk
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,11 +44,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include untracked files as Added entries (only meaningful when target is '.')",
     )
+    _ = p.add_argument(
+        "--walk",
+        nargs=2,
+        metavar=("FROM", "TO"),
+        help="Walk mode: show per-commit diffs between two refs (inclusive)",
+    )
     return p
 
 
 def main() -> None:
-    render(build_parser().parse_args())
+    args = build_parser().parse_args()
+    if args.walk:
+        # Validate: --walk is incompatible with -b, -t, --untracked
+        if args.base != "HEAD" or args.targets != ["."] or args.untracked:
+            sys.exit("Error: --walk cannot be combined with -b, -t, or --untracked")
+        render_walk(args)
+    else:
+        render(args)
 
 
 if __name__ == "__main__":

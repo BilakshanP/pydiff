@@ -191,4 +191,26 @@
     document.querySelectorAll('[data-fs-next]').forEach(function(b) {
         b.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); fsNavigate(1); });
     });
+
+    // Walk mode: step navigation
+    if (typeof walkSteps !== 'undefined' && walkSteps.length) {
+        var walkIdx = 0;
+        var steps = document.querySelectorAll('.walk-step');
+        var info = document.getElementById('walk-info');
+        var wp = document.getElementById('walk-prev');
+        var wn = document.getElementById('walk-next');
+        function walkUpdate() {
+            steps.forEach(function(s, i) { s.style.display = i === walkIdx ? '' : 'none'; });
+            var s = walkSteps[walkIdx];
+            if (info) info.innerHTML = '<strong>' + s.hash + '</strong> ' + s.subject +
+                ' <span style="color:#6e7781">— ' + s.author + ', ' + s.date + '</span>' +
+                ' <span style="color:#8b949e">(' + (walkIdx + 1) + ' / ' + walkSteps.length + ')</span>';
+            if (wp) wp.disabled = walkIdx === 0;
+            if (wn) wn.disabled = walkIdx === steps.length - 1;
+            window.scrollTo(0, 0);
+        }
+        if (wp) wp.addEventListener('click', function() { if (walkIdx > 0) { walkIdx--; walkUpdate(); } });
+        if (wn) wn.addEventListener('click', function() { if (walkIdx < steps.length - 1) { walkIdx++; walkUpdate(); } });
+        walkUpdate();
+    }
 })();

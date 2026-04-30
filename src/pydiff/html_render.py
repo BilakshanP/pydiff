@@ -21,6 +21,7 @@ from pydiff.gitio import (
     git,
     is_worktree,
     list_changes,
+    list_commits,
     list_untracked,
     ref_chip,
     resolve,
@@ -380,7 +381,9 @@ def render(args: argparse.Namespace) -> None:
             label, color, _ = STATUS_STYLE[status]
             from_lines = show(repo, base_sha, old) if status not in ("A", "U") else []
             to_lines = show(repo, target_sha, new) if status != "D" else []
-            from_desc = html.escape(f"{base}:{old}" if status not in ("A", "U") else "Not present")
+            from_desc = html.escape(
+                f"{base}:{old}" if status not in ("A", "U") else "Not present"
+            )
             to_desc = html.escape(f"{target}:{new}" if status != "D" else "Deleted")
             header = html.escape(f"{old} → {new}" if status == "R" else new)
             diff_html = differ.make_table(
@@ -415,6 +418,145 @@ def render(args: argparse.Namespace) -> None:
             + "</div>"
         )
 
+    out.append(JS_SCRIPT)
+    out.append("</body></html>")
+    with open(out_path, "w", encoding="utf-8") as f:
+        _ = f.write("\n".join(out))
+    print(f"✅ Report generated: {out_path}")
+
+
+def render_walk(args: argparse.Namespace) -> None:
+    repo = cast(str, args.dir)
+    walk = cast(list[str], args.walk)
+    out_path = cast(str, args.out)
+    context_lines = cast(int, args.context)
+    full = cast(bool, args.full)
+    from_ref, to_ref = walk
+
+    _ = resolve(repo, from_ref)
+    _ = resolve(repo, to_ref)
+
+    commits = list_commits(repo, from_ref, to_ref)
+    if len(commits) < 2:
+        import sys
+
+        sys.exit("Error: --walk requires at least 2 commits in the range")
+
+    try:
+        repo_path = toplevel(repo)
+    except subprocess.CalledProcessError:
+        repo_path = os.path.abspath(repo)
+    repo_name = os.path.basename(repo_path) or repo_path
+    try:
+        origin = git(repo, "config", "--get", "remote.origin.url").strip()
+    except subprocess.CalledProcessError:
+        origin = ""
+    repo_display = html.escape(repo_name)
+    if origin:
+        repo_display += (
+            f" <span style='color:#6e7781'>(origin: {html.escape(origin)})</span>"
+        )
+
+    pairs = list(zip(commits, commits[1:]))
+    # Build commit metadata as JSON for JS navigation
+    steps_json: list[str] = []
+    for (_, b_short, _, _, _), (_, t_short, t_subj, t_author, t_date) in pairs:
+        steps_json.append(
+            "{"
+            + f'"base":"{html.escape(b_short)}",'
+            + f'"hash":"{html.escape(t_short)}",'
+            + f'"subject":{html.escape(t_subj, quote=True).__repr__()},'
+            + f'"author":{html.escape(t_author, quote=True).__repr__()},'
+            + f'"date":"{html.escape(t_date)}"'
+            + "}"
+        )
+
+    out = [
+        f"<!DOCTYPE html><html><head><title>Git Walk: {html.escape(from_ref)}..{html.escape(to_ref)}</title>{CSS_STYLES}</head><body>"
+    ]
+    out.append("<h1>Git Walk</h1>")
+    out.append(f"<p><strong>Repo:</strong> <code>{repo_display}</code><br>")
+    out.append(
+        f"<strong>Range:</strong> <code>{html.escape(from_ref)}..{html.escape(to_ref)}</code>"
+        + f" ({len(pairs)} step{'s' if len(pairs) != 1 else ''})</p>"
+    )
+
+    # Walk top bar
+    out.append(
+        "<div class='walk-bar'>"
+        + "<button class='hdr-btn' id='walk-prev' title='Previous commit'>&#8592;</button>"
+        + "<span id='walk-info'></span>"
+        + "<button class='hdr-btn' id='walk-next' title='Next commit'>&#8594;</button>"
+        + "</div>"
+    )
+
+    differ = difflib.HtmlDiff()
+    context_mode = not full
+
+    for idx, (
+        (b_sha, b_short, _, _, _),
+        (t_sha, t_short, t_subj, t_author, t_date),
+    ) in enumerate(pairs):
+        changes = list_changes(repo, b_sha, t_sha)
+        counts = {"A": 0, "M": 0, "D": 0, "R": 0, "U": 0}
+        for status, _, _ in changes:
+            counts[status] = counts.get(status, 0) + 1
+
+        hidden = " style='display:none'" if idx > 0 else ""
+        out.append(f"<div class='walk-step' data-step='{idx}'{hidden}>")
+
+        out.append("<div class='summary-card'><h3>Summary</h3><div>")
+        for code in ("A", "M", "D", "R"):
+            label, _, cls = STATUS_STYLE[code]
+            out.append(f"<span class='badge {cls}'>{counts[code]} {label}</span> ")
+        out.append("</div>")
+
+        step_target = t_short
+        if changes:
+            out.append(
+                "<h4>Table of Contents</h4><div class='toc-tree'>"
+                + _build_toc_tree(changes, step_target)
+                + "</div>"
+            )
+        else:
+            out.append("<p><i>No changes.</i></p>")
+        out.append("</div>")
+
+        for status, old, new in changes:
+            label, color, _ = STATUS_STYLE[status]
+            from_lines = show(repo, b_sha, old) if status not in ("A", "U") else []
+            to_lines = show(repo, t_sha, new) if status != "D" else []
+            from_desc = html.escape(
+                f"{b_short}:{old}" if status not in ("A", "U") else "Not present"
+            )
+            to_desc = html.escape(f"{t_short}:{new}" if status != "D" else "Deleted")
+            header = html.escape(f"{old} → {new}" if status == "R" else new)
+            diff_html = differ.make_table(
+                from_lines,
+                to_lines,
+                fromdesc=from_desc,
+                todesc=to_desc,
+                context=context_mode,
+                numlines=context_lines,
+            )
+            out.append(
+                render_file_block(
+                    anchor_id(step_target, new),
+                    color,
+                    label,
+                    header,
+                    diff_html,
+                    from_desc,
+                    to_desc,
+                    status,
+                    max(len(from_lines), len(to_lines), 1),
+                )
+            )
+
+        out.append("</div>")
+
+    # Embed step metadata for JS
+    out.append(f"<script>var walkSteps = [{','.join(steps_json)}];</script>")
     out.append(JS_SCRIPT)
     out.append("</body></html>")
     with open(out_path, "w", encoding="utf-8") as f:

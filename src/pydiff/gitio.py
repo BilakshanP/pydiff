@@ -97,6 +97,27 @@ def list_changes(repo: str, a: str, b: str) -> list[tuple[str, str, str]]:
     return changes
 
 
+def list_commits(
+    repo: str, from_ref: str, to_ref: str
+) -> list[tuple[str, str, str, str, str]]:
+    """Return commits from from_ref to to_ref inclusive, oldest first.
+
+    Each entry is (sha, short, subject, author, date).
+    """
+    sep = "\x1f"
+    fmt = sep.join(["%H", "%h", "%s", "%an", "%ci"])
+    out = git(repo, "log", "--reverse", f"--format={fmt}", f"{from_ref}..{to_ref}")
+    # Prepend from_ref itself so the range is inclusive.
+    from_line = git(repo, "log", "-1", f"--format={fmt}", from_ref)
+    lines = [from_line.strip()] + [ln for ln in out.strip().splitlines() if ln]
+    result: list[tuple[str, str, str, str, str]] = []
+    for line in lines:
+        parts = line.split(sep, 4)
+        if len(parts) == 5:
+            result.append((parts[0], parts[1], parts[2], parts[3], parts[4]))
+    return result
+
+
 def list_untracked(repo: str) -> list[str]:
     """Return paths of untracked files relative to the repo root, honoring .gitignore."""
     root = toplevel(repo)
