@@ -32,6 +32,11 @@ From git:
 pip install git+https://github.com/bilakshanp/pydiff.git
 ```
 
+Or with uv:
+```
+uv tool install git+https://github.com/bilakshanp/pydiff.git
+```
+
 For development:
 ```
 uv sync --dev
