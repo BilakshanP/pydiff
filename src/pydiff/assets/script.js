@@ -211,6 +211,13 @@
         }
         if (wp) wp.addEventListener('click', function() { if (walkIdx > 0) { walkIdx--; walkUpdate(); } });
         if (wn) wn.addEventListener('click', function() { if (walkIdx < steps.length - 1) { walkIdx++; walkUpdate(); } });
+        document.querySelectorAll('[data-walk-jump]').forEach(function(a) {
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                walkIdx = parseInt(a.dataset.walkJump, 10);
+                walkUpdate();
+            });
+        });
         walkUpdate();
     }
 })();

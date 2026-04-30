@@ -13,6 +13,7 @@ import html
 import os
 import re
 import subprocess
+import sys
 from importlib.resources import files
 from typing import cast
 
@@ -287,8 +288,14 @@ def render(args: argparse.Namespace) -> None:
     context_lines = cast(int, args.context)
     full = cast(bool, args.full)
     untracked = cast(bool, args.untracked)
+    verbose = cast(bool, args.verbose)
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(msg, file=sys.stderr)
 
     base_sha = resolve(repo, base)
+    log(f"Resolved {base} → {base_sha[:8]}")
     base_short = (
         "worktree"
         if is_worktree(base_sha)
@@ -334,6 +341,7 @@ def render(args: argparse.Namespace) -> None:
         )
         kind = classify(repo, t)
         target_info.append((t, sha, short, f"target-{len(target_info)}", kind))
+        log(f"Resolved {t} → {short}")
 
     if len(target_info) > 1:
         out.append("<div class='target-index'><h3>Targets in this report</h3><ol>")
@@ -350,6 +358,7 @@ def render(args: argparse.Namespace) -> None:
             for p in list_untracked(repo):
                 if p not in existing:
                     changes.append(("U", p, p))
+        log(f"Target {target_short} ({len(changes)} files)")
         counts = {"A": 0, "M": 0, "D": 0, "R": 0, "U": 0}
         for status, _, _ in changes:
             counts[status] = counts.get(status, 0) + 1
@@ -377,7 +386,8 @@ def render(args: argparse.Namespace) -> None:
             out.append("<p><i>No changes.</i></p>")
         out.append("</div>")
 
-        for status, old, new in changes:
+        for file_idx, (status, old, new) in enumerate(changes, 1):
+            log(f"  [{file_idx}/{len(changes)}] {new}")
             label, color, _ = STATUS_STYLE[status]
             from_lines = show(repo, base_sha, old) if status not in ("A", "U") else []
             to_lines = show(repo, target_sha, new) if status != "D" else []
@@ -431,16 +441,21 @@ def render_walk(args: argparse.Namespace) -> None:
     out_path = cast(str, args.out)
     context_lines = cast(int, args.context)
     full = cast(bool, args.full)
+    verbose = cast(bool, args.verbose)
     from_ref, to_ref = walk
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(msg, file=sys.stderr)
 
     _ = resolve(repo, from_ref)
     _ = resolve(repo, to_ref)
+    log(f"Resolved {from_ref}..{to_ref}")
 
     commits = list_commits(repo, from_ref, to_ref)
     if len(commits) < 2:
-        import sys
-
         sys.exit("Error: --walk requires at least 2 commits in the range")
+    log(f"Found {len(commits)} commits ({len(commits) - 1} steps)")
 
     try:
         repo_path = toplevel(repo)
@@ -490,6 +505,20 @@ def render_walk(args: argparse.Namespace) -> None:
         + "</div>"
     )
 
+    # Commit index
+    out.append("<details class='walk-index'><summary>Commits</summary><ol>")
+    for idx, ((_, b_short, _, _, _), (_, t_short, t_subj, t_author, _)) in enumerate(
+        pairs
+    ):
+        out.append(
+            f"<li><a href='#' data-walk-jump='{idx}'>"
+            + f"<code>{html.escape(b_short)}..{html.escape(t_short)}</code> "
+            + f"{html.escape(t_subj)} "
+            + f"<span style='color:#6e7781'>— {html.escape(t_author)}</span>"
+            + "</a></li>"
+        )
+    out.append("</ol></details>")
+
     differ = difflib.HtmlDiff()
     context_mode = not full
 
@@ -498,6 +527,9 @@ def render_walk(args: argparse.Namespace) -> None:
         (t_sha, t_short, t_subj, t_author, t_date),
     ) in enumerate(pairs):
         changes = list_changes(repo, b_sha, t_sha)
+        log(
+            f"[{idx + 1}/{len(pairs)}] {b_short}..{t_short} — {t_subj} ({len(changes)} files)"
+        )
         counts = {"A": 0, "M": 0, "D": 0, "R": 0, "U": 0}
         for status, _, _ in changes:
             counts[status] = counts.get(status, 0) + 1
@@ -522,7 +554,8 @@ def render_walk(args: argparse.Namespace) -> None:
             out.append("<p><i>No changes.</i></p>")
         out.append("</div>")
 
-        for status, old, new in changes:
+        for file_idx, (status, old, new) in enumerate(changes, 1):
+            log(f"  [{file_idx}/{len(changes)}] {new}")
             label, color, _ = STATUS_STYLE[status]
             from_lines = show(repo, b_sha, old) if status not in ("A", "U") else []
             to_lines = show(repo, t_sha, new) if status != "D" else []

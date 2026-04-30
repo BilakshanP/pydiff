@@ -50,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar=("FROM", "TO"),
         help="Walk mode: show per-commit diffs between two refs (inclusive)",
     )
+    _ = p.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print progress to stderr",
+    )
     return p
 
 
