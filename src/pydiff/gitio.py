@@ -29,7 +29,12 @@ REF_KIND: dict[str, tuple[str, str]] = {
 
 def git(repo: str, *args: str) -> str:
     return subprocess.run(
-        ["git", "-C", repo, *args], check=True, capture_output=True, text=True
+        ["git", "-C", repo, *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     ).stdout
 
 
@@ -144,9 +149,18 @@ def show(repo: str, ref: str, path: str) -> list[str]:
             return ["<Binary or non-UTF-8 file>\n"]
         return text.splitlines(keepends=True)
     try:
-        text = git(repo, "show", f"{ref}:{path}")
+        result = subprocess.run(
+            ["git", "-C", repo, "show", f"{ref}:{path}"],
+            check=True,
+            capture_output=True,
+        )
+        raw = result.stdout
     except subprocess.CalledProcessError:
         return ["<Error reading blob>\n"]
-    if "\0" in text[:8000]:
+    if b"\0" in raw[:8000]:
+        return ["<Binary or non-UTF-8 file>\n"]
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
         return ["<Binary or non-UTF-8 file>\n"]
     return text.splitlines(keepends=True)
