@@ -40,6 +40,22 @@ STATUS_STYLE: dict[str, tuple[str, str, str]] = {
 }
 
 
+def _filter_changes(
+    changes: list[tuple[str, str, str]],
+    include: list[str] | None,
+    exclude: list[str] | None,
+) -> list[tuple[str, str, str]]:
+    """Filter changes by include/exclude regex patterns against file path."""
+    if not include and not exclude:
+        return changes
+    result = changes
+    if include:
+        result = [c for c in result if any(re.search(p, c[2]) for p in include)]
+    if exclude:
+        result = [c for c in result if not any(re.search(p, c[2]) for p in exclude)]
+    return result
+
+
 _assets = files("pydiff.assets")
 CSS_STYLES: str = (
     f"<style>\n{_assets.joinpath('styles.css').read_text(encoding='utf-8')}</style>"
@@ -289,6 +305,8 @@ def render(args: argparse.Namespace) -> None:
     full = cast(bool, args.full)
     untracked = cast(bool, args.untracked)
     verbose = cast(bool, args.verbose)
+    include: list[str] | None = args.include
+    exclude: list[str] | None = args.exclude
 
     def log(msg: str) -> None:
         if verbose:
@@ -358,6 +376,7 @@ def render(args: argparse.Namespace) -> None:
             for p in list_untracked(repo):
                 if p not in existing:
                     changes.append(("U", p, p))
+        changes = _filter_changes(changes, include, exclude)
         log(f"Target {target_short} ({len(changes)} files)")
         counts = {"A": 0, "M": 0, "D": 0, "R": 0, "U": 0}
         for status, _, _ in changes:
@@ -442,6 +461,8 @@ def render_walk(args: argparse.Namespace) -> None:
     context_lines = cast(int, args.context)
     full = cast(bool, args.full)
     verbose = cast(bool, args.verbose)
+    include: list[str] | None = args.include
+    exclude: list[str] | None = args.exclude
     from_ref, to_ref = walk
 
     def log(msg: str) -> None:
@@ -527,6 +548,7 @@ def render_walk(args: argparse.Namespace) -> None:
         (t_sha, t_short, t_subj, t_author, t_date),
     ) in enumerate(pairs):
         changes = list_changes(repo, b_sha, t_sha)
+        changes = _filter_changes(changes, include, exclude)
         log(
             f"[{idx + 1}/{len(pairs)}] {b_short}..{t_short} — {t_subj} ({len(changes)} files)"
         )

@@ -55,6 +55,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print progress to stderr",
     )
+    _ = p.add_argument(
+        "--include",
+        action="append",
+        metavar="PATTERN",
+        help="Only include files matching regex (repeatable)",
+    )
+    _ = p.add_argument(
+        "--exclude",
+        action="append",
+        metavar="PATTERN",
+        help="Exclude files matching regex (repeatable)",
+    )
     return p
 
 
