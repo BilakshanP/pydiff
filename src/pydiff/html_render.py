@@ -247,7 +247,7 @@ def _build_toc_tree(changes: list[tuple[str, str, str]], target: str) -> str:
 
     def _file_html(status: str, old: str, new: str, filename: str) -> str:
         color = STATUS_STYLE[status][1]
-        display = html.escape(filename if status != "R" else f"{old} → {new}")
+        display = html.escape(filename if status != "R" else f"{old} -> {new}")
         return (
             f"<div class='toc-entry'><span style='color:{color}'>[{status}]</span> "
             + f"<a href='#{anchor_id(target, new)}'>{display}</a></div>"
@@ -278,7 +278,7 @@ def _build_toc_tree(changes: list[tuple[str, str, str]], target: str) -> str:
             if len(child_files) == 1 and not child_dirs:
                 s, o, n, fn = child_files[0]
                 color = STATUS_STYLE[s][1]
-                display = html.escape(fn if s != "R" else f"{o} → {n}")
+                display = html.escape(fn if s != "R" else f"{o} -> {n}")
                 lines.append(
                     f"<div class='toc-entry'><span style='color:{color}'>[{s}]</span> "
                     + f"<a href='#{anchor_id(target, n)}'>{html.escape(label)}/{display}</a></div>"
@@ -316,7 +316,7 @@ def render(args: argparse.Namespace) -> None:
         sys.exit("Error: '.' (worktree) cannot be used as --base. Use it as a target instead: -b <ref> -t .")
 
     base_sha = resolve(repo, base)
-    log(f"Resolved {base} → {base_sha[:8]}")
+    log(f"Resolved {base} -> {base_sha[:8]}")
     base_short = (
         "worktree"
         if is_worktree(base_sha)
@@ -362,7 +362,7 @@ def render(args: argparse.Namespace) -> None:
         )
         kind = classify(repo, t)
         target_info.append((t, sha, short, f"target-{len(target_info)}", kind))
-        log(f"Resolved {t} → {short}")
+        log(f"Resolved {t} -> {short}")
 
     if len(target_info) > 1:
         out.append("<div class='target-index'><h3>Targets in this report</h3><ol>")
@@ -417,7 +417,7 @@ def render(args: argparse.Namespace) -> None:
                 f"{base}:{old}" if status not in ("A", "U") else "Not present"
             )
             to_desc = html.escape(f"{target}:{new}" if status != "D" else "Deleted")
-            header = html.escape(f"{old} → {new}" if status == "R" else new)
+            header = html.escape(f"{old} -> {new}" if status == "R" else new)
             diff_html = differ.make_table(
                 from_lines,
                 to_lines,
@@ -454,7 +454,7 @@ def render(args: argparse.Namespace) -> None:
     out.append("</body></html>")
     with open(out_path, "w", encoding="utf-8") as f:
         _ = f.write("\n".join(out))
-    print(f"✅ Report generated: {out_path}")
+    print(f"Report generated: {out_path}")
 
 
 def render_walk(args: argparse.Namespace) -> None:
@@ -538,7 +538,7 @@ def render_walk(args: argparse.Namespace) -> None:
             f"<li><a href='#' data-walk-jump='{idx}'>"
             + f"<code>{html.escape(b_short)}..{html.escape(t_short)}</code> "
             + f"{html.escape(t_subj)} "
-            + f"<span style='color:#6e7781'>— {html.escape(t_author)}</span>"
+            + f"<span style='color:#6e7781'>-- {html.escape(t_author)}</span>"
             + "</a></li>"
         )
     out.append("</ol></details>")
@@ -553,7 +553,7 @@ def render_walk(args: argparse.Namespace) -> None:
         changes = list_changes(repo, b_sha, t_sha)
         changes = _filter_changes(changes, include, exclude)
         log(
-            f"[{idx + 1}/{len(pairs)}] {b_short}..{t_short} — {t_subj} ({len(changes)} files)"
+            f"[{idx + 1}/{len(pairs)}] {b_short}..{t_short} -- {t_subj} ({len(changes)} files)"
         )
         counts = {"A": 0, "M": 0, "D": 0, "R": 0, "U": 0}
         for status, _, _ in changes:
@@ -588,7 +588,7 @@ def render_walk(args: argparse.Namespace) -> None:
                 f"{b_short}:{old}" if status not in ("A", "U") else "Not present"
             )
             to_desc = html.escape(f"{t_short}:{new}" if status != "D" else "Deleted")
-            header = html.escape(f"{old} → {new}" if status == "R" else new)
+            header = html.escape(f"{old} -> {new}" if status == "R" else new)
             diff_html = differ.make_table(
                 from_lines,
                 to_lines,
@@ -619,4 +619,4 @@ def render_walk(args: argparse.Namespace) -> None:
     out.append("</body></html>")
     with open(out_path, "w", encoding="utf-8") as f:
         _ = f.write("\n".join(out))
-    print(f"✅ Report generated: {out_path}")
+    print(f"Report generated: {out_path}")

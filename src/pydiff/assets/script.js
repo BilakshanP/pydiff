@@ -97,7 +97,7 @@
             var target = document.getElementById(href.slice(1));
             if (!target) return;
             e.preventDefault();
-            // `t` target is the <table> itself — just scroll its container to 0
+            // `t` target is the <table> itself -- just scroll its container to 0
             // so the header lands at its natural position (avoids the
             // scroll-padding-top adding extra gap above it).
             if (target.tagName === 'TABLE') {
@@ -203,7 +203,7 @@
             steps.forEach(function(s, i) { s.style.display = i === walkIdx ? '' : 'none'; });
             var s = walkSteps[walkIdx];
             if (info) info.innerHTML = '<strong>' + s.hash + '</strong> ' + s.subject +
-                ' <span style="color:#6e7781">— ' + s.author + ', ' + s.date + '</span>' +
+                ' <span style="color:#6e7781">-- ' + s.author + ', ' + s.date + '</span>' +
                 ' <span style="color:#8b949e">(' + (walkIdx + 1) + ' / ' + walkSteps.length + ')</span>';
             if (wp) wp.disabled = walkIdx === 0;
             if (wn) wn.disabled = walkIdx === steps.length - 1;

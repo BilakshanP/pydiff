@@ -1,24 +1,24 @@
 # pydiff
 
-A small CLI that generates a self-contained HTML report comparing git refs — branches, tags, or commits — in any local repository.
+A small CLI that generates a self-contained HTML report comparing git refs -- branches, tags, or commits -- in any local repository.
 
 ## Features
 
-- Compare any two git refs (branch, tag, commit SHA, `HEAD~N`, `origin/main`, …).
+- Compare any two git refs (branch, tag, commit SHA, `HEAD~N`, `origin/main`, ...).
 - Compare a ref against the **current worktree** (uncommitted changes) using `.` as the target.
 - Compare one base against multiple targets in a single report.
-- **Walk mode**: step through per-commit diffs between two refs with `← →` navigation.
+- **Walk mode**: step through per-commit diffs between two refs with `<- ->` navigation.
 - Detects **Added / Modified / Deleted / Renamed / Untracked** files.
 - Labels each ref in the report as **branch**, **remote**, **tag**, **commit**, or **worktree**.
 - Side-by-side diffs with inline add/remove/change highlighting.
 - **Tree-structured TOC** grouping files by directory (collapsible folders, single-file dirs inlined).
 - Per-file controls: **Both / Left only / Right only** view, **Sync scroll** toggle (preserves scroll position across toggles), draggable resize handle.
-- Per-file and per-target **fullscreen** toggle (Esc to exit), with **← → file navigation** in fullscreen.
+- Per-file and per-target **fullscreen** toggle (Esc to exit), with **<- -> file navigation** in fullscreen.
 - Per-target collapsible sections; prev / next target navigation when multiple targets are present.
 - Context-only view by default; optional full-file view.
-- **Dark mode** — automatic via `prefers-color-scheme`.
+- **Dark mode** -- automatic via `prefers-color-scheme`.
 - Binary and non-UTF-8 files are detected and skipped.
-- Zero third-party dependencies — pure Python 3 standard library.
+- Zero third-party dependencies -- pure Python 3 standard library.
 
 ## Requirements
 
@@ -128,12 +128,12 @@ The generated HTML contains:
 - A header with the repo path and the base ref.
 - A **targets index** (shown only when multiple targets are present).
 - Per target: a **collapsible section** containing a summary with Added / Modified / Deleted / Renamed counts, a table of contents linking to each changed file, and a side-by-side diff per file.
-- Floating **↑ / ↓ navigation** between target sections (multi-target reports only).
+- Floating **^ / v navigation** between target sections (multi-target reports only).
 
 Each file diff supports:
 - Toggling between side-by-side view, left-only, and right-only.
 - Toggling sync scroll between panes.
-- Dragging the central handle to resize left/right split (clamped 10–90%).
+- Dragging the central handle to resize left/right split (clamped 10--90%).
 - Fullscreen toggle on the file (or on the whole target section).
 
 Pure adds/deletes render with only the relevant side shown.

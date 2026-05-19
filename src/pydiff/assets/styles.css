@@ -130,7 +130,7 @@ span.diff_chg { background-color: #0969da; color: #fff; border-radius: 3px; padd
 .walk-index a:hover { color: #0969da; }
 
 /* Dark mode: follows OS / browser preference. Saturated accent colors
-   (badges, status chips, inline diff spans) are kept as-is — they read fine
+   (badges, status chips, inline diff spans) are kept as-is -- they read fine
    on both backgrounds. Only surfaces, borders, and muted text are remapped. */
 @media (prefers-color-scheme: dark) {
     body { background: #0d1117; color: #c9d1d9; }
