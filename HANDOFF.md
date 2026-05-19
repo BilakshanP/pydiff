@@ -127,6 +127,7 @@ JS_SCRIPT: str                                 # loaded from pydiff/assets/scrip
 
 def anchor_id(ref_label: str, path: str) -> str
 def split_diff_table(diff_html: str, from_desc: str, to_desc: str, max_lineno: int) -> tuple[str, str]
+def _filter_changes(changes, include, exclude) -> list[...]
 def _build_toc_tree(changes: list[...], target: str) -> str
 def render_file_block(..., max_lineno: int) -> str
 def render(args: argparse.Namespace) -> None
@@ -233,6 +234,8 @@ Do not add named fonts (Roboto, Segoe UI, Consolas, etc).
 --untracked    include untracked files as Untracked [U] (only meaningful when a worktree target is present)
 --walk         walk mode: --walk FROM TO steps through per-commit diffs between two refs
 --verbose      print progress to stderr
+--include      only include files matching regex (repeatable)
+--exclude      exclude files matching regex (repeatable)
 ```
 
 Directory-diff mode was intentionally **removed** -- tool is git-only now.
@@ -267,7 +270,10 @@ Tool is considered feature-complete and bug-free by the user as of this handoff.
 - **Tree-structured TOC.** `_build_toc_tree()` groups files by directory into nested collapsible `<details>` elements. Single-child dirs collapsed (`a/b/c/` merged). Single-file dirs inlined without collapsible wrapper.
 - **Untracked files as `[U]`.** Distinct from Added `[A]`. Blue color `#0969da`, badge class `badge-unt`. `list_untracked()` runs from `toplevel(repo)` to return toplevel-relative paths.
 - **Walk mode (`--walk FROM TO`).** `list_commits()` in `gitio.py` enumerates commits via `git log --reverse`. `render_walk()` in `html_render.py` generates per-step diffs (consecutive commit pairs). Sticky walk bar with `<- ->` nav, commit hash/subject/author/date, step counter. Collapsible commit index for direct jump. Steps shown/hidden via JS. Incompatible with `-b`/`-t`/`--untracked`.
-- **`--verbose` flag.** Prints progress to stderr: ref resolution, per-target/step info with file counts, per-file progress. Without flag, only final `` line prints.
+- **`--verbose` flag.** Prints progress to stderr: ref resolution, per-target/step info with file counts, per-file progress. Without flag, only final line prints.
+- **`--include`/`--exclude` regex filters.** `_filter_changes()` helper filters the changes list. Include runs first, then exclude. Applied in both `render()` and `render_walk()`.
+- **Windows encoding fix.** `git()` helper uses `encoding='utf-8', errors='replace'`. `show()` for refs reads raw bytes and decodes UTF-8 explicitly, avoiding cp1252 crash on non-ASCII content.
+- **Base validation.** `render()` exits with a clear error if `-b .` is used (worktree cannot be base, only target).
 
 Prior changes kept from earlier sessions: doctype added, fonts made generic-only, type hints added throughout, repo-name shown as basename, full basedpyright cleanup (argparse fields cast through `typing.cast`, unused call results assigned to `_`, implicit string concatenations replaced with explicit `+`, `_CELL_RE.findall` result annotated as `list[tuple[str, str, str]]`), ruff cleanup (removed 7 extraneous `f` prefixes from non-interpolated strings, applied `ruff format`), added `.gitignore`, removed `bk/` backups and `report_all.html` for GitHub push.
 

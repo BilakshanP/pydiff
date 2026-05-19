@@ -63,6 +63,8 @@ With no flags, compares `HEAD` against the current worktree (uncommitted changes
 | `--untracked` | off | When a worktree target is present, also include untracked files as Untracked |
 | `--walk` | off | Walk mode: `--walk FROM TO` steps through per-commit diffs between two refs |
 | `--verbose` | off | Print progress to stderr |
+| `--include` | none | Only include files matching regex (repeatable) |
+| `--exclude` | none | Exclude files matching regex (repeatable) |
 
 ## Examples
 
