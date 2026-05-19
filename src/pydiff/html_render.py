@@ -313,7 +313,9 @@ def render(args: argparse.Namespace) -> None:
             print(msg, file=sys.stderr)
 
     if is_worktree(base):
-        sys.exit("Error: '.' (worktree) cannot be used as --base. Use it as a target instead: -b <ref> -t .")
+        sys.exit(
+            "Error: '.' (worktree) cannot be used as --base. Use it as a target instead: -b <ref> -t ."
+        )
 
     base_sha = resolve(repo, base)
     log(f"Resolved {base} -> {base_sha[:8]}")
